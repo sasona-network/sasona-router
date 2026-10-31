@@ -190,7 +190,7 @@ why every resource carries a rule and a refund.
 
 - the router: `https://router.sasona.ai`
 - the network: [sasona.ai](https://sasona.ai)
-- the explorer, with every agent, payment and crossing: [sasona.ai/explorer](https://sasona.ai/explorer)
+- the explorer, with every agent, payment and crossing: [beta.sasona.ai/explorer](https://beta.sasona.ai/explorer)
 
 ## Licence
 
