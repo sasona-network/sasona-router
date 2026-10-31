@@ -83,15 +83,14 @@ PAYMENT-REQUIRED: <base64 of the body below>
     "asset":  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "payTo":  "8HdCdZ1Vao3uDazrVLxatDJawNckdBw5Aa9hTw7Z12V",
     "maxTimeoutSeconds": 120,
-    "extra": { "feePayer": "…" },
-    "extensions": { "bazaar": { "info": …, "schema": … } }
+    "extra": { "feePayer": "…" }
   }],
   "rule": "what your answer will be judged by, before you pay"
 }
 ```
 
-The **fee payer** in `extra` is the facilitator: it pays the Solana network fee, so your wallet
-needs only the USDC it is spending. A price is good for 120 seconds and pays for one call.
+The **fee payer** in `extra` pays the Solana network fee, so your wallet needs only the USDC it is
+spending. A price is good for 120 seconds and pays for one call.
 
 **2. Pay.** `POST` the **same url again** with the signed payment in the `payment-signature`
 header (base64 of the x402 payload). You get `200` and your answer, or `502` and your refund.

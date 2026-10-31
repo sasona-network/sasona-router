@@ -29,10 +29,7 @@ export type Requirements = {
   asset: string;
   payTo: string;
   maxTimeoutSeconds?: number;
-  resource?: string;
-  description?: string;
   extra?: { feePayer?: string };
-  extensions?: Record<string, unknown>;
 };
 
 export type Answer = {
@@ -58,7 +55,7 @@ export type CallOptions = {
   url: string;
   /** What that resource takes. `{}` for a resource that takes no input of its own. */
   body?: Record<string, unknown>;
-  /** The wallet that pays. It needs USDC and nothing else: the facilitator pays the network fee. */
+  /** The wallet that pays. It needs USDC and nothing else: the network fee is paid for you. */
   payer: Keypair;
   /** The most this call may cost, in micro-dollars. Default $0.02. */
   maxMicros?: bigint | number;
@@ -148,16 +145,12 @@ export async function call(o: CallOptions): Promise<Answer> {
   const tx = new VersionedTransaction(message);
   tx.sign([o.payer]);      // our slot only; the fee payer signs when it settles
 
-  // `resource` and `extensions` go at the TOP of the payload as well as inside `accepted`: a
-  // directory catalogues the resource from the settled payment, and it reads them from there.
   const payload = {
     x402Version: 2,
     scheme: req.scheme,
     network: req.network,
-    resource: { url: req.resource, description: req.description ?? "", mimeType: "application/json" },
     accepted: req,
     payload: { transaction: Buffer.from(tx.serialize()).toString("base64") },
-    extensions: req.extensions ?? {},
   };
 
   const paid = await f(o.url, {

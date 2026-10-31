@@ -5,7 +5,7 @@
  *   KEY=… URL=https://router.sasona.ai/x402/price INPUT=So11111111111111111111111111111111111111112 npx tsx examples/buy.ts
  *
  * KEY is a Solana keypair file - the 64-byte JSON array `solana-keygen` writes. It needs USDC and
- * nothing else: the facilitator pays the network fee. Keep it out of your repository.
+ * nothing else: the network fee is paid for you. Keep it out of your repository.
  */
 import fs from "node:fs";
 import { Keypair } from "@solana/web3.js";
