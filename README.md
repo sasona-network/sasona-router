@@ -47,6 +47,10 @@ npm install @solana/web3.js @solana/spl-token
 
 Or copy `src/index.ts` into your own project — it imports nothing but those two packages.
 
+`bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)` on the first line of
+every run is a warning from inside `@solana/web3.js`, not from here. There is nothing to rebuild
+and nothing is wrong.
+
 ```ts
 import { Keypair } from "@solana/web3.js";
 import { call } from "./src/index";
@@ -66,14 +70,14 @@ console.log(out.seller.tx);     // our payment to the service, on its own chain
 
 `call()` does the whole exchange: it asks for a price, checks the price is on the network and in
 the asset you expect, signs one USDC transfer, asks again with the payment, and hands you the
-answer. It refuses to pay above `maxMicros` (default $0.02), refuses a network or an asset that is
+answer. It refuses to pay above `maxMicros` (default $0.10, which buys any resource below), refuses a network or an asset that is
 not the one you asked for, and never creates a token account.
 
 Read the interface in plain text at any time:
 
 ```bash
 curl https://router.sasona.ai/
-curl https://router.sasona.ai/.well-known/x402.json      # the same, machine readable
+curl https://router.sasona.ai/.well-known/x402.json      # the resources alone, machine readable
 ```
 
 ---
@@ -139,12 +143,18 @@ rule published before you pay.
 | `POST /x402/big-wallets` | net flow of wallets labelled smart money, 1h and 24h | Nansen | x402, USDC on Solana |
 | `POST /x402/news` | latest articles on a ticker, each with a sentiment score | Alpha Vantage | MPP, USDC on Tempo |
 | `POST /x402/trending` | the coins the market is searching for right now | CoinGecko | MPP, USDC on Tempo |
+| `POST /x402/ipinfo-ip-lite` | where an IP address is | IPinfo | MPP, USDC on Tempo |
 
-The live list, with prices and schemas, is always `GET /.well-known/x402.json`.
+Prices today run from $0.00215 to $0.07 a call, and the price you are given is read from the seller
+at the moment you ask. The live list, with every price and schema, is always
+`GET /.well-known/x402.json` — that file is the authority, not this table.
+
+The last row is there because somebody bought it through `/x402/buy` and it answered; that is how a
+resource gets a url here.
 
 ## Anything else you already know about
 
-The table above is what has been tested. It is not the limit: name any paid endpoint and we read
+What is listed is not the limit: name any paid endpoint and we read
 **its** 402, pay it on whichever rail it asks for, and hand back what came.
 
 ```ts
@@ -172,8 +182,8 @@ have not tested, so what is checked is that it answered — and if it does not, 
 full.
 
 A service bought this way gets a url of its own here, so the next agent finds it by searching
-instead of having to know the url. Name a url somebody already bought and the price points you at
-it (`alsoAt`), with what is promised there spelled out.
+instead of having to know the url — `/x402/ipinfo-ip-lite` in the table above is one. When that
+happens the answer carries `alsoAt`, the url it now has.
 
 ---
 
@@ -181,8 +191,10 @@ it (`alsoAt`), with what is promised there spelled out.
 
 - **You pay first and are refunded in full** when there is no answer, or the answer fails the
   published rule. The refund is a transaction on chain, in the same call.
-- **The price is the seller's own**, read from its 402 at the moment you ask, plus 15% and the
-  settlement cost. It is never taken from a list of ours that could be stale.
+- **The price is the seller's own**, read from its 402 at the moment you ask, plus 15%, plus a
+  flat $0.001 for settling the payment on chain. The flat part is most of what you pay over the
+  seller's price on the cheapest calls: a $0.001 service costs you $0.00215. It is never taken
+  from a list of ours that could be stale.
 - **Every hop is readable.** Your payment on Solana, our payment to the seller on its chain. Both
   transaction ids come back with the answer.
 - **One payment buys one call.** The same payment, sent again, returns the same answer.
@@ -205,8 +217,10 @@ it (`alsoAt`), with what is promised there spelled out.
 | `404` | no such resource — the answer lists the ones there are |
 | `409` | that price is gone, or the request changed; ask for a price again |
 | `413` | the input is larger than the service takes |
+| `415` | the request did not say it was JSON |
 | `429` | more than 30 calls a minute from one address; a purchase takes two of them |
 | `502` | no answer, or it failed the rule: see `refund`, which is everything you paid |
+| `501` | `/tempo/<resource>` — reserved, and not open; the answer says what is missing |
 | `503` | we cannot sell right now, and nothing was charged |
 
 ---

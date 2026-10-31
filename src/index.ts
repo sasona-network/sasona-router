@@ -18,9 +18,16 @@ import { createTransferCheckedInstruction, getAssociatedTokenAddressSync } from 
 export const ROUTER = "https://router.sasona.ai";
 const USDC_MAINNET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-/** The spec caps these for a standard wallet; stay well under. */
+/**
+ * The compute budget on the transfer. These are the two values the router's own signer puts on a
+ * payment it builds (`COMPUTE_UNIT_LIMIT` / `COMPUTE_UNIT_PRICE` in its signer), so a payment
+ * built here looks to the facilitator exactly like one built there - which is the point. A plain
+ * token transfer uses a fraction of this.
+ */
 const CU_LIMIT = 60_000;
 const CU_PRICE = 1;
+/** $0.10. The dearest resource listed today is $0.07. */
+export const DEFAULT_MAX_MICROS = 100_000;
 
 export type Requirements = {
   scheme: string;
@@ -42,8 +49,10 @@ export type Answer = {
   answer: string | null;
   contentType?: string;
   bytes?: number;
-  paid: { micros: number; tx: string };
-  seller: { paid: boolean; tx: string; network?: string; protocol?: string };
+  // Both are absent when nothing was bought: a 502 that carries only `error` is a normal answer
+  // from this router, and declaring them present made `out.paid.micros` a crash on a refusal.
+  paid?: { micros: number; tx: string };
+  seller?: { paid: boolean; tx: string; network?: string; protocol?: string };
   refund?: { tx: string; micros: number; landed: boolean };
   repeated?: boolean;
   alsoAt?: string;
@@ -57,7 +66,11 @@ export type CallOptions = {
   body?: Record<string, unknown>;
   /** The wallet that pays. It needs USDC and nothing else: the network fee is paid for you. */
   payer: Keypair;
-  /** The most this call may cost, in micro-dollars. Default $0.02. */
+  /**
+   * The most this call may cost, in micro-dollars. Default $0.10, which buys any resource this
+   * router lists today - the dearest is $0.07. Set it to what the call is worth to you: it is
+   * checked against the price before anything is signed, and $0.02 would refuse two of them.
+   */
   maxMicros?: bigint | number;
   /** A Solana RPC. Default: the public mainnet endpoint, which rate-limits. */
   rpc?: string;
@@ -110,7 +123,7 @@ export async function call(o: CallOptions): Promise<Answer> {
   const f = o.fetchImpl ?? fetch;
   const network = o.network ?? SOLANA_MAINNET;
   const asset = o.asset ?? USDC_MAINNET;
-  const max = BigInt(o.maxMicros ?? 20_000);
+  const max = BigInt(o.maxMicros ?? DEFAULT_MAX_MICROS);
 
   const { requirements: req } = await quote(o);
   const amount = BigInt(req.amount ?? "0");
@@ -124,7 +137,14 @@ export async function call(o: CallOptions): Promise<Answer> {
   const conn = new Connection(o.rpc ?? "https://api.mainnet-beta.solana.com", "confirmed");
   const mint = new PublicKey(asset);
   const from = getAssociatedTokenAddressSync(mint, o.payer.publicKey);
-  const to = getAssociatedTokenAddressSync(mint, new PublicKey(req.payTo));
+  // An address off the curve is a program's, not a wallet's, and the library throws its own error
+  // for it. A caller of this client should only ever have to catch one kind.
+  let to;
+  try {
+    to = getAssociatedTokenAddressSync(mint, new PublicKey(req.payTo));
+  } catch (e) {
+    throw new RouterError(`the 402 names a payTo this client cannot pay: ${req.payTo}`, 402, String(e));
+  }
   // A wallet we could not read and a wallet that holds nothing are not the same thing: saying the
   // second when it was the first sends you looking at the wrong problem.
   let held;

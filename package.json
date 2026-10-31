@@ -37,13 +37,11 @@
     "check:links": "node scripts/check-links.mjs",
     "check:client": "tsx scripts/check-client.ts"
   },
-  "dependencies": {
+  "devDependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.8",
+    "@types/node": "^22.9.0",
     "tsx": "^4.19.2",
     "typescript": "^5.9.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.9.0",
-    "typescript": "^5.6.0",
-    "tsx": "^4.19.0"
   }
 }

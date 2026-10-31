@@ -25,10 +25,12 @@ console.log("what this router sells today:");
 for (const r of await resources()) console.log(`  ${r.url}  ${r.name}`);
 
 console.log(`\npaying for ${url} as ${payer.publicKey.toBase58()}`);
-const out = await call({ url, body, payer, maxMicros: 20_000 });
+// MOST is your ceiling in micro-dollars; left out it is $0.10, which buys anything listed here.
+const out = await call({ url, body, payer, maxMicros: Number(process.env.MOST ?? 100_000) });
 
 console.log(`delivered  ${out.delivered}`);
 console.log(`answer     ${String(out.answer ?? out.error ?? "").slice(0, 300)}`);
-console.log(`you paid   ${out.paid.micros / 1e6} USDC   ${out.paid.tx}`);
-console.log(`the seller ${out.seller.paid ? "was paid" : "was not paid"}   ${out.seller.tx}`);
+// `paid` and `seller` are absent when nothing was bought, and that is a normal answer here.
+if (out.paid) console.log(`you paid   ${out.paid.micros / 1e6} USDC   ${out.paid.tx}`);
+if (out.seller) console.log(`the seller ${out.seller.paid ? "was paid" : "was not paid"}   ${out.seller.tx}`);
 if (out.refund) console.log(`refunded   ${out.refund.micros / 1e6} USDC   ${out.refund.tx}`);

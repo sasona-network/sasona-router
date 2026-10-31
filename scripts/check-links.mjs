@@ -1,18 +1,24 @@
-// Every url this repository hands a reader, asked for real.
-//
-// The explorer was published here as sasona.ai/explorer, which answers 404: that host is an older
-// copy of the site and the explorer is served on another one. A link in a public repository is a
-// promise to somebody who has no way of knowing it is stale, so no url ships from here unchecked.
+// Every url and every resource this repository hands a reader, asked for real.
 //
 //     node scripts/check-links.mjs
 //
-// Nothing is installed and nothing is signed. A page is fetched; a resource is asked for a price
+// The explorer was once published here as sasona.ai/explorer, which answers 404: that host is an
+// older copy of the site. A link in a public repository is a promise to somebody who has no way of
+// knowing it is stale, so nothing ships from here unasked.
+//
+// It reads EVERY file in the repository, not a list of four - a file left off that list is a file
+// whose links nobody checks - and it asks for the resource rows in the README table too, which are
+// written host-less (`POST /x402/run-code`) and so were invisible to a plain url match. A renamed
+// resource used to ship a dead table row under a green check.
+//
+// Nothing is signed and nothing is spent: a page is fetched, and a resource is asked for a price
 // with an empty body, which is what it answers before any payment.
 import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const FILES = ["README.md", "package.json", "src/index.ts", "examples/buy.ts"];
+const ROUTER = "https://router.sasona.ai";
+const SKIP = new Set(["node_modules", ".git", "dist"]);
 let fails = 0;
 
 function check(name, ok, detail = "") {
@@ -20,18 +26,35 @@ function check(name, ok, detail = "") {
   if (!ok) fails++;
 }
 
+function files(dir) {
+  const out = [];
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP.has(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...files(p));
+    else if (/\.(md|ts|mjs|js|json)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
 const urls = new Set();
-for (const f of FILES) {
-  const text = fs.readFileSync(path.join(root, f), "utf8");
-  for (const m of text.matchAll(/https:\/\/[\w.-]*sasona\.ai[\w./-]*/g)) {
+for (const f of files(root)) {
+  const text = fs.readFileSync(f, "utf8");
+  // ours, and the repository's own page. example.com is deliberately not a real seller.
+  for (const m of text.matchAll(/https:\/\/(?:[\w-]+\.)*sasona\.ai[\w./-]*|https:\/\/github\.com\/sasona-network[\w./-]*/g)) {
     urls.add(m[0].replace(/[.,)]+$/, ""));
   }
+  // and every resource the README names, host-less, however it writes it
+  if (f.endsWith("README.md")) {
+    for (const m of text.matchAll(/(?:^|[\s(`"'])(\/x402\/[a-z0-9-]+)/g)) urls.add(ROUTER + m[1]);
+  }
 }
-check("the repository hands out urls, and they were all collected", urls.size > 0, urls.size);
+check("the repository hands out urls, and every file was read for them", urls.size > 8, urls.size);
 
 /** What this url is, and so what answering means for it - never a list written twice. */
 function expected(u) {
-  const { pathname } = new URL(u);
+  const { hostname, pathname } = new URL(u);
+  if (hostname !== "router.sasona.ai") return { method: "GET", ok: [200], says: "answers" };
   if (pathname === "/x402/buy") return { method: "POST", ok: [400], says: "exists and refuses an empty call" };
   if (pathname.startsWith("/x402/")) return { method: "POST", ok: [402], says: "answers with a price" };
   return { method: "GET", ok: [200], says: "answers" };

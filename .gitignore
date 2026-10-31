@@ -6,3 +6,6 @@ dist/
 *.json.key
 keys/
 package-lock.json
+# the file the examples teach a reader to make
+*keypair*.json
+id.json
