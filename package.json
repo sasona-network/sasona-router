@@ -1,0 +1,21 @@
+{
+  "name": "@sasona/router",
+  "version": "0.1.0",
+  "description": "Pay for any x402 or MPP API from one call. An agent-payments router: your AI agent pays in USDC on Solana, the service is paid on its own chain.",
+  "keywords": [
+    "x402", "agent-payments", "ai-agents", "micropayments", "pay-per-call",
+    "solana", "usdc", "tempo", "mpp", "http-402", "machine-payments", "agentic-commerce"
+  ],
+  "license": "MIT",
+  "homepage": "https://router.sasona.ai",
+  "repository": { "type": "git", "url": "https://github.com/sasona-network/sasona-router.git" },
+  "type": "module",
+  "main": "src/index.ts",
+  "peerDependencies": {
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0"
+  },
+  "scripts": {
+    "example": "tsx examples/buy.ts"
+  }
+}
