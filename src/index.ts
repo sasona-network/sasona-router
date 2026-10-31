@@ -125,8 +125,18 @@ export async function call(o: CallOptions): Promise<Answer> {
   const mint = new PublicKey(asset);
   const from = getAssociatedTokenAddressSync(mint, o.payer.publicKey);
   const to = getAssociatedTokenAddressSync(mint, new PublicKey(req.payTo));
-  const held = await conn.getTokenAccountBalance(from).catch(() => null);
-  if (!held) throw new RouterError("the payer holds no account in that asset", 0, { account: from.toBase58() });
+  // A wallet we could not read and a wallet that holds nothing are not the same thing: saying the
+  // second when it was the first sends you looking at the wrong problem.
+  let held;
+  try {
+    held = await conn.getTokenAccountBalance(from);
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    if (/could not find account|not found|invalid param/i.test(why)) {
+      throw new RouterError("the payer holds no account in that asset", 0, { account: from.toBase58() });
+    }
+    throw new RouterError(`the rpc did not answer, so nothing was signed: ${why}`, 0, { rpc: o.rpc ?? "default" });
+  }
   if (BigInt(held.value.amount) < amount) {
     throw new RouterError(`the payer holds ${held.value.amount}, the price is ${amount}`, 0, null);
   }
@@ -166,4 +176,53 @@ export async function call(o: CallOptions): Promise<Answer> {
     throw new RouterError(`the router answered ${paid.status}`, paid.status, out);
   }
   return out;
+}
+
+export type BuyOptions = Omit<CallOptions, "url" | "body"> & {
+  /** The seller's own paid url. Its 402 is read at the moment you call, whatever rail it asks for. */
+  service: string;
+  /** The body THAT service expects, in its own shape - not ours. */
+  body?: Record<string, unknown>;
+  /** POST unless the seller wants PUT or PATCH. */
+  method?: "POST" | "PUT" | "PATCH";
+  /** Another router, for a test deployment. Default the live one. */
+  router?: string;
+};
+
+/**
+ * Buy one call of a service YOU name - any paid endpoint, not only the ones listed here.
+ *
+ * The exchange is the one above: a price, a payment, an answer. What is promised is less, and the
+ * answer says so. Nobody has written a rule for a service we have not tested, so what is checked
+ * is that it answered - and when it does not, you are refunded in full.
+ *
+ * If the service turns out to be one that already has a url of its own here, the price names it
+ * (`alsoAt`): the same call costs the same there, and anything tested is tested there.
+ */
+export async function buy(o: BuyOptions): Promise<Answer> {
+  return call({ ...named(o), payer: o.payer });
+}
+
+/** The price of a call you name, without paying for it. */
+export async function quoteService(o: Omit<BuyOptions, "payer">) {
+  return quote(named(o));
+}
+
+/**
+ * The general resource's url and the body it takes, from what you named.
+ *
+ * One place, so a price and the payment that follows it cannot be built differently - and the url
+ * is checked here rather than in one of the two, which is how the price request ended up sending
+ * anything at all while the payment refused it.
+ */
+function named<T extends Omit<BuyOptions, "payer">>(o: T) {
+  if (!o.service?.startsWith("https://")) {
+    throw new RouterError("service must be the https url of the seller's own paid endpoint", 0, o.service);
+  }
+  const { service, body, method, router, ...rest } = o;
+  return {
+    ...rest,
+    url: `${router ?? ROUTER}/x402/buy`,
+    body: { service, ...(body ? { body } : {}), ...(method ? { method } : {}) },
+  };
 }

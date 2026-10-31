@@ -5,3 +5,4 @@ dist/
 .env.*
 *.json.key
 keys/
+package-lock.json

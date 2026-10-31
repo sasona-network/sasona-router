@@ -1,21 +1,49 @@
 {
-  "name": "@sasona/router",
+  "name": "@sasona/router-client",
   "version": "0.1.0",
-  "description": "Pay for any x402 or MPP API from one call. An agent-payments router: your AI agent pays in USDC on Solana, the service is paid on its own chain.",
+  "description": "Client for the Sasona router: pay for any x402 or MPP API with one call. Your AI agent pays in USDC on Solana, the service is paid on its own chain. The router itself is a hosted service at router.sasona.ai.",
   "keywords": [
-    "x402", "agent-payments", "ai-agents", "micropayments", "pay-per-call",
-    "solana", "usdc", "tempo", "mpp", "http-402", "machine-payments", "agentic-commerce"
+    "x402",
+    "agent-payments",
+    "ai-agents",
+    "micropayments",
+    "pay-per-call",
+    "solana",
+    "usdc",
+    "tempo",
+    "mpp",
+    "http-402",
+    "machine-payments",
+    "agentic-commerce",
+    "sdk",
+    "api-client"
   ],
   "license": "MIT",
   "homepage": "https://router.sasona.ai",
-  "repository": { "type": "git", "url": "https://github.com/sasona-network/sasona-router.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sasona-network/sasona-router.git"
+  },
   "type": "module",
   "main": "src/index.ts",
   "peerDependencies": {
-    "@solana/spl-token": "^0.4.0",
-    "@solana/web3.js": "^1.95.0"
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.8"
   },
   "scripts": {
-    "example": "tsx examples/buy.ts"
+    "example": "tsx examples/buy.ts",
+    "example:any": "tsx examples/any-service.ts",
+    "typecheck": "tsc --noEmit",
+    "check:links": "node scripts/check-links.mjs",
+    "check:client": "tsx scripts/check-client.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0"
   }
 }

@@ -1,20 +1,28 @@
-# Sasona Router — one payment, any paid API, on the chain your agent already holds money on
+# Sasona Router — the client
 
 An AI agent that wants a paid API usually finds it priced in a protocol it does not speak, on a
-chain it holds nothing on. Sasona is an **x402 router**: your agent pays once in USDC on Solana,
-we pay the service in whatever its own `402 Payment Required` asks for — x402 on another chain,
-or MPP on Tempo — and you get its answer back.
+chain it holds nothing on. The **Sasona router** is a live service that crosses that gap: your
+agent pays it once in USDC on Solana over x402, it pays the service in whatever that service's own
+`402 Payment Required` asks for — x402 on another chain, or MPP on Tempo — and you get the answer
+back.
+
+```
+the router    https://router.sasona.ai      ← the service, hosted by us
+this repo     a small client for it         ← what you call it with
+```
+
+**This repository is not the router.** It is one file that speaks to it: it asks the price, checks
+the price against what you expect, signs one USDC transfer, and hands you the answer. The router is
+plain HTTP and the standard is public, so you can do every bit of this with `curl` and your own
+signing code — read the interface in words at `https://router.sasona.ai/` — and this exists so you
+do not have to.
 
 No account. No API key. No wallet on the seller's chain. No SOL for fees. One HTTP call, one
 signed payment, one answer.
 
-```
-https://router.sasona.ai
-```
-
 ---
 
-## What this is for
+## What the router is for
 
 - **agent payments** — pay per call, machine to machine, with no human in the loop
 - **x402** — the HTTP 402 payment standard, as a client and as a server
@@ -29,9 +37,15 @@ in full, on chain.
 
 ## Quickstart
 
+It is not on npm. Take the file:
+
 ```bash
+git clone https://github.com/sasona-network/sasona-router.git
+cd sasona-router
 npm install @solana/web3.js @solana/spl-token
 ```
+
+Or copy `src/index.ts` into your own project — it imports nothing but those two packages.
 
 ```ts
 import { Keypair } from "@solana/web3.js";
@@ -128,23 +142,38 @@ rule published before you pay.
 
 The live list, with prices and schemas, is always `GET /.well-known/x402.json`.
 
-### Anything else you already know about
+## Anything else you already know about
+
+The table above is what has been tested. It is not the limit: name any paid endpoint and we read
+**its** 402, pay it on whichever rail it asks for, and hand back what came.
 
 ```ts
-await call({
-  url: "https://router.sasona.ai/x402/buy",
-  body: { service: "https://any-seller.example/paid-endpoint", body: { what: "it expects" } },
+import { buy, quoteService } from "./src/index";
+
+// what it would cost, without paying for it
+const { requirements } = await quoteService({ service: "https://any-seller.example/paid-endpoint" });
+
+const out = await buy({
+  service: "https://any-seller.example/paid-endpoint",
+  body: { what: "it expects" },     // that seller's own shape, not ours
   payer: buyer,
 });
+console.log(out.answer, out.verified);   // verified is false, and means it
 ```
 
-Name any paid endpoint and we read **its** 402, pay it on whichever rail it asks for, and hand
-back what came. What is promised there is less, and the answer says so: nobody has written a rule
-for a service we have not tested, so what is checked is that it answered — and if it does not,
-you are refunded in full.
+```bash
+SERVICE=https://any-seller.example/paid-endpoint npm run example:any
+```
 
-A service bought this way becomes a resource with a url of its own, so the next agent finds it by
-searching instead of having to know the url.
+That prints the price and stops; add `KEY=` to pay for the call.
+
+What is promised here is less, and the answer says so: nobody has written a rule for a service we
+have not tested, so what is checked is that it answered — and if it does not, you are refunded in
+full.
+
+A service bought this way gets a url of its own here, so the next agent finds it by searching
+instead of having to know the url. Name a url somebody already bought and the price points you at
+it (`alsoAt`), with what is promised there spelled out.
 
 ---
 
@@ -176,7 +205,7 @@ searching instead of having to know the url.
 | `404` | no such resource — the answer lists the ones there are |
 | `409` | that price is gone, or the request changed; ask for a price again |
 | `413` | the input is larger than the service takes |
-| `429` | too many calls from one address |
+| `429` | more than 30 calls a minute from one address; a purchase takes two of them |
 | `502` | no answer, or it failed the rule: see `refund`, which is everything you paid |
 | `503` | we cannot sell right now, and nothing was charged |
 
