@@ -2,9 +2,19 @@
 
 An AI agent that wants a paid API usually finds it priced in a protocol it does not speak, on a
 chain it holds nothing on. The **Sasona router** is a live service that crosses that gap: your
-agent pays it once in USDC on Solana over x402, it pays the service in whatever that service's own
-`402 Payment Required` asks for — x402 on another chain, or MPP on Tempo — and you get the answer
-back.
+agent pays it once, on a rail it already holds money on, it pays the service in whatever that
+service's own `402 Payment Required` asks for, and you get the answer back.
+
+It works in both directions, as of 1 November 2026:
+
+| you pay | url | how |
+| --- | --- | --- |
+| x402, USDC on Solana | `/x402/<resource>` | the price is in the body and the `PAYMENT-REQUIRED` header; the payment goes on `payment-signature` |
+| MPP, USDC.e on Tempo | `/tempo/<resource>` | the price is on the `www-authenticate` header; the credential goes on `authorization` |
+
+Either url buys the same resource and returns the same answer. **This client speaks the Solana
+side.** The Tempo side is plain HTTP too and any MPP client reaches it — the section
+[Paying on Tempo](#paying-on-tempo) has the exchange.
 
 ```
 the router    https://router.sasona.ai      ← the service, hosted by us
@@ -26,7 +36,8 @@ signed payment, one answer.
 
 - **agent payments** — pay per call, machine to machine, with no human in the loop
 - **x402** — the HTTP 402 payment standard, as a client and as a server
-- **MPP on Tempo** — paid for you, so your agent never touches that chain
+- **MPP on Tempo** — paid for you if you pay on Solana, and taken from you if you would rather
+  pay there; either way your agent touches one chain
 - **pay-per-call APIs** — price read from the seller at the moment of the call, never a list of ours
 - **micropayments in USDC on Solana** — cents and fractions of cents, settled on chain
 
@@ -131,10 +142,60 @@ receipt — there is no idempotency key to invent or keep.
 
 ---
 
+## Paying on Tempo
+
+The same resources, paid in USDC.e on Tempo over MPP. Nothing about the resource changes: same
+body, same rule, same refund, same answer. What changes is where the price and the payment sit.
+
+**1. Ask.** `POST` the `/tempo` url with your body and no payment.
+
+```
+402 Payment Required
+www-authenticate: Payment id="...", realm="router.sasona.ai", method="tempo",
+                  intent="charge", request="<base64url>", expires="...", opaque="..."
+```
+
+`request` decodes to the amount, the currency and the chain:
+
+```json
+{
+  "amount": "7900",
+  "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+  "methodDetails": { "chainId": 4217 },
+  "recipient": "0x58826405858e4465c807F28931a2d5904C8f4a36"
+}
+```
+
+**2. Pay.** `POST` the same url again with the credential on `authorization: Payment …`. You get
+`200` and your answer, with the receipt on `authentication-info`.
+
+See the price for yourself, without paying:
+
+```bash
+curl -i -X POST https://router.sasona.ai/tempo/run-code   -H 'content-type: application/json'   -d '{"input":"print(6*7)"}'
+```
+
+This client does not build that credential — it signs Solana transfers and nothing else. The
+reference client that does is [`mppx`](https://www.npmjs.com/package/mppx), which is what we pay
+Tempo sellers with ourselves.
+
+`POST /tempo/buy` takes any paid endpoint by url, exactly as `/x402/buy` does, so a buyer holding
+USDC.e on Tempo and nothing on Solana can pay for a service that settles only in x402 USDC there.
+That crossing ran on mainnet on 1 November 2026: the payment to us on Tempo was
+`0x1bed21aef1a8f0b9293a838511b5381bcbf670018bfef055fc220b55688deaba`, our payment to the service
+on Solana was
+`HVcNrcGb9RZixMG5SLgp238KR9q1aBM38Q5tyJrt3fucrDmoTkvF6kNNkZfwL9foUWjS5PHMGA5rrU8SSqQ5zF3`, and
+both are on chain to read.
+
+---
+
 ## What you can buy
 
 Each resource has a url of its own, a price read from its seller at the moment you call, and a
 rule published before you pay.
+
+Each one answers at the url below **and** at the same name under `/tempo/` — `/x402/run-code`
+and `/tempo/run-code` are the same resource, bought on different rails.
 
 | resource | what it returns | the service behind it | we pay it in |
 | --- | --- | --- | --- |
@@ -144,13 +205,15 @@ rule published before you pay.
 | `POST /x402/news` | latest articles on a ticker, each with a sentiment score | Alpha Vantage | MPP, USDC on Tempo |
 | `POST /x402/trending` | the coins the market is searching for right now | CoinGecko | MPP, USDC on Tempo |
 | `POST /x402/ipinfo-ip-lite` | where an IP address is | IPinfo | MPP, USDC on Tempo |
+| `POST /x402/glim-search` | recent posts on X matching a term | glim.sh | MPP, USDC on Tempo |
+| `POST /x402/api-inspect-certificate` | a host's TLS certificate: expiry, names, fingerprint, TLS version | api.mekler.ai | x402, USDC on Solana |
 
-Prices today run from $0.00215 to $0.07 a call, and the price you are given is read from the seller
-at the moment you ask. The live list, with every price and schema, is always
-`GET /.well-known/x402.json` — that file is the authority, not this table.
+The price you are given is read from the seller at the moment you ask. The live list, with every
+price and schema, is always `GET /.well-known/x402.json` — that file is the authority, not this
+table.
 
-The last row is there because somebody bought it through `/x402/buy` and it answered; that is how a
-resource gets a url here.
+The last three rows are there because somebody bought them through `/x402/buy` or `/tempo/buy` and
+they answered; that is how a resource gets a url here.
 
 ## Anything else you already know about
 
@@ -203,8 +266,8 @@ happens the answer carries `alsoAt`, the url it now has.
 
 - A resource marked `verified: false`, and everything under `/x402/buy`, carries no tested rule.
   What is checked there is that the service answered.
-- Being paid **in** MPP on Tempo is reserved at `/tempo/<resource>` and is not open: selling there
-  means receiving there, and we have no receiving address on Tempo yet. Ask it and it says so.
+- Paying us on Tempo is open, but **this client cannot do it**: it signs Solana transfers and
+  nothing else. Use an MPP client for that side, or curl and your own signing.
 
 ---
 
@@ -220,7 +283,6 @@ happens the answer carries `alsoAt`, the url it now has.
 | `415` | the request did not say it was JSON |
 | `429` | more than 30 calls a minute from one address; a purchase takes two of them |
 | `502` | no answer, or it failed the rule: see `refund`, which is everything you paid |
-| `501` | `/tempo/<resource>` — reserved, and not open; the answer says what is missing |
 | `503` | we cannot sell right now, and nothing was charged |
 
 ---

@@ -44,9 +44,15 @@ for (const f of files(root)) {
   for (const m of text.matchAll(/https:\/\/(?:[\w-]+\.)*sasona\.ai[\w./-]*|https:\/\/github\.com\/sasona-network[\w./-]*/g)) {
     urls.add(m[0].replace(/[.,)]+$/, ""));
   }
-  // and every resource the README names, host-less, however it writes it
+  // and every resource the README names, host-less, however it writes it - plus its twin on the
+  // other rail, DERIVED from the same written path. Both doors sell the same resource, so a row
+  // that is right about one and wrong about the other is still a dead url for somebody.
   if (f.endsWith("README.md")) {
-    for (const m of text.matchAll(/(?:^|[\s(`"'])(\/x402\/[a-z0-9-]+)/g)) urls.add(ROUTER + m[1]);
+    for (const m of text.matchAll(/(?:^|[\s(`"'])(\/x402\/[a-z0-9-]+)/g)) {
+      urls.add(ROUTER + m[1]);
+      urls.add(ROUTER + m[1].replace("/x402/", "/tempo/"));
+    }
+    for (const m of text.matchAll(/(?:^|[\s(`"'])(\/tempo\/[a-z0-9-]+)/g)) urls.add(ROUTER + m[1]);
   }
 }
 check("the repository hands out urls, and every file was read for them", urls.size > 8, urls.size);
@@ -55,8 +61,12 @@ check("the repository hands out urls, and every file was read for them", urls.si
 function expected(u) {
   const { hostname, pathname } = new URL(u);
   if (hostname !== "router.sasona.ai") return { method: "GET", ok: [200], says: "answers" };
-  if (pathname === "/x402/buy") return { method: "POST", ok: [400], says: "exists and refuses an empty call" };
+  if (pathname === "/x402/buy" || pathname === "/tempo/buy")
+    return { method: "POST", ok: [400], says: "exists and refuses an empty call" };
   if (pathname.startsWith("/x402/")) return { method: "POST", ok: [402], says: "answers with a price" };
+  // The MPP rail prices on the www-authenticate header and takes POST only; a GET here answers
+  // 405 and said nothing about whether the resource exists.
+  if (pathname.startsWith("/tempo/")) return { method: "POST", ok: [402], says: "answers with a price on Tempo" };
   return { method: "GET", ok: [200], says: "answers" };
 }
 
